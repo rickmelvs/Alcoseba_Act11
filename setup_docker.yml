@@ -1,0 +1,82 @@
+---
+- hosts: all
+  become: true
+  tasks:
+
+  - name: Update repository index (Ubuntu)
+    tags: always
+    apt:
+      update_cache: yes
+    changed_when: false
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Install Docker
+    apt:
+      name: docker.io
+      state: present
+      update_cache: yes
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Start Docker service
+    systemd:
+      name: docker
+      state: restarted
+      enabled: yes
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Add user "rickpcc" to Docker group
+    user:
+      name: "{{ ansible_user }}"
+      groups: docker
+      append: yes
+      state: present
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Create directory for Docker project
+    file:
+      name: "/home/{{ ansible_user }}/docker_setup"
+      state: directory
+      mode: '0755'
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Copy Dockerfile to remote server
+    copy:
+      src: /home/rickpcc/Alcoseba_Act11/Dockerfile
+      dest: "/home/{{ ansible_user }}/docker_setup/Dockerfile"
+      mode: '0644'
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Copy index.html to remote server
+    copy:
+      src: /home/rickpcc/Alcoseba_Act11/index.html
+      dest: "/home/{{ ansible_user }}/docker_setup/index.html"
+      mode: '0644'
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Allow port 8080 for web access in UFW
+    ufw:
+      rule: allow
+      port: '8080'
+      proto: tcp
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Build Docker Image using Dockerfile
+    docker_image:
+      name: apache-mysql
+      source: build
+      build:
+        path: /home/{{ ansible_user }}/docker_setup
+        dockerfile: /home/{{ ansible_user }}/docker_setup/Dockerfile
+      force: yes
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Run Docker Container
+    docker_container:
+      name: apache-mysql-container
+      image: apache-mysql:latest
+      state: started
+      restart_policy: always
+      ports:
+        - "8080:80"
+        - "3306:3306"
+    when: ansible_distribution == "Ubuntu"
